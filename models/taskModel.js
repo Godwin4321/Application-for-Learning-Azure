@@ -1,7 +1,7 @@
-require("dotenv").config(); // Loads your .env variables
+require("dotenv").config();
 const sql = require("mssql");
 
-// Configuration using Environment Variables for security
+// Configuration using Environment Variables
 const config = {
   user: process.env.DB_USER,
   password: process.env.DB_PASSWORD,
@@ -13,7 +13,7 @@ const config = {
   },
 };
 
-// Create a connection pool to manage multiple requests efficiently
+// Create a connection pool
 const poolPromise = new sql.ConnectionPool(config)
   .connect()
   .then((pool) => {
@@ -21,42 +21,53 @@ const poolPromise = new sql.ConnectionPool(config)
     return pool;
   })
   .catch((err) => {
-    console.error(
-      "Database Connection Failed! Bad config or network issue: ",
-      err,
-    );
-    process.exit(1); // Stop the app if it can't reach the DB
+    console.error("Database Connection Failed: ", err);
+    process.exit(1);
   });
 
 module.exports = {
-  // READ: Get all tasks from the SQL Table
+  // READ: Get all tasks
   getAllTasks: async () => {
-    const pool = await poolPromise;
-    const result = await pool
-      .request()
-      .query("SELECT id, title, created_at FROM Tasks");
-    return result.recordset;
+    try {
+      const pool = await poolPromise;
+      const result = await pool
+        .request()
+        .query("SELECT id, title, created_at FROM Tasks");
+      // .recordset contains the array of rows. We return an empty array if null.
+      return result.recordset || [];
+    } catch (err) {
+      console.error("SQL Read Error: ", err);
+      return [];
+    }
   },
 
-  // CREATE: Insert a new task and return the created record
+  // CREATE: Insert a new task
   createTask: async (title) => {
-    const pool = await poolPromise;
-    const result = await pool
-      .request()
-      .input("title", sql.NVarChar, title) // Prevents SQL Injection
-      .query("INSERT INTO Tasks (title) OUTPUT INSERTED.* VALUES (@title)");
-    return result.recordset[0];
+    try {
+      const pool = await poolPromise;
+      const result = await pool
+        .request()
+        .input("title", sql.NVarChar, title)
+        .query("INSERT INTO Tasks (title) OUTPUT INSERTED.* VALUES (@title)");
+      return result.recordset[0];
+    } catch (err) {
+      console.error("SQL Create Error: ", err);
+      throw err;
+    }
   },
 
-  // DELETE: Remove a task by its ID
+  // DELETE: Remove a task by ID
   deleteTask: async (id) => {
-    const pool = await poolPromise;
-    const result = await pool
-      .request()
-      .input("id", sql.Int, id) // Prevents SQL Injection
-      .query("DELETE FROM Tasks WHERE id = @id");
-
-    // Returns true if a row was actually deleted, else null
-    return result.rowsAffected[0] > 0 ? true : null;
+    try {
+      const pool = await poolPromise;
+      const result = await pool
+        .request()
+        .input("id", sql.Int, id)
+        .query("DELETE FROM Tasks WHERE id = @id");
+      return result.rowsAffected[0] > 0;
+    } catch (err) {
+      console.error("SQL Delete Error: ", err);
+      return false;
+    }
   },
 };
